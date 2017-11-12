@@ -1,0 +1,63 @@
+---
+title: "preparacion de datos"
+output: html_document
+---
+
+## Serie 2001 a 2016
+
+Los datos tienen la siguiente pinta
+
+```{r 2001-2016}
+library(pxR)
+df<-as.data.frame(read.px('./raw-data/01001.px'))
+df<-unique(df[df$Ramas.de.actividad=='PRODUCTO INTERIOR BRUTO A PRECIOS DE MERCADO',])
+names(df)<-c('period', 'kind','region','value')
+series_2001_2010<-dcast(df,region~period, value.var = 'value')
+
+head(series_2001_2010,3)
+```
+## Serie 1995-2004
+Solo tomamos años anterioes al 2000
+
+```{r 1995-2004}
+
+df<-as.data.frame(read.px('./raw-data/re001.px'))
+names(df)<-c('period', 'region', 'value')
+series_1995_2000<-dcast(df,region~period, value.var = 'value')[,-c(2,3,4,5,6)]
+head(series_1995_2000,3)
+```
+
+## Serie 1980-1996
+Solo tomamos años anterioes a 1995
+
+Este dataset incluye provincias, asi que tenemos que elegir "manualmente" las CCAA
+
+Esta serie utiliza millones de pesetas, como unidad, que pasamos a miles de euros por homegenidad con las anteriores
+
+
+```{r 1980-1996}
+
+df<-as.data.frame(read.px('./raw-data/re002.px'))
+names(df)<-c('period', 'region', 'value')
+series_1980_1996<-dcast(df,region~period, value.var = 'value')[,-c(2,3)][c(1,10,14,15,16,19,20,30,36,41,45,48,53,54,55,56,60),]
+series_1980_1996[,-1]<-round(series_1980_1996[,-1]/0.166386)
+head(series_1980_1996,3)
+```
+## Uniendo las series
+
+Combinamos las 17 comunidades y etiquetamos adecuadamente los periodos para los que solo hay informacion estimada
+
+Exportamos los datos a una tabla feather
+
+```{r join}
+
+table<-cbind(series_2001_2010[1:17,], series_1995_2000[1:17,-1], series_1980_1996[1:17,-1])
+table.m<-melt(table)
+names(table.m)[2:3]<-c("period","gdp_current_price")
+table.m$year<-as.numeric(gsub(" *\\(.*\\)","",as.character(table.m$period)))
+table.m$kind<-"real"
+table.m$kind[grep(" *\\(.*\\)",as.character(table.m$period))]<-"estimated"
+library(feather)
+write_feather(table.m,'gdp_per_region_1980_to_2016.feather')
+table.m
+```
